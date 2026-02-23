@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <title>川湘家宴 · 微信扫码点餐</title>
+    <!-- Font Awesome 6 (免费) 用于菜品图标占位 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- QRCode 生成库 -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        }
+
+        body {
+            background-color: #f7f3ee;  /* 暖灰底 */
+            padding: 0 0 30px 0;
+        }
+
+        .page {
+            max-width: 500px;            /* 移动端卡片宽度 */
+            margin: 0 auto;
+            background-color: #fffcf9;
+            box-shadow: 0 0 40px rgba(0,0,0,0.05);
+            border-radius: 32px 32px 0 0;
+            overflow: hidden;
+        }
+
+        /* 二维码名片区域 —— 带背景图 */
+        .qr-hero {
+            position: relative;
+            padding: 24px 20px 30px 20px;
+            color: #3e2c1b;
+            background-image: url('data:image/svg+xml;utf8,<svg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" opacity="0.15"><path d="M20 10 Q30 0 40 10 L50 20 Q60 30 50 40 L40 50 Q30 60 20 50 L10 40 Q0 30 10 20 Z" fill="%23b34b3a" /></svg>'), 
+            linear-gradient(145deg, #fae3d1 0%, #f3d3bc 100%);
+            background-repeat: repeat, no-repeat;
+            background-size: 80px 80px, cover;
+            background-position: 10px 10px, center;
+            border-bottom: 4px solid #b64b2c;
+            box-shadow: inset 0 -2px 10px rgba(92, 42, 21, 0.1);
+        }
+
+        /* 深色半透明遮罩，保证文字可读 (增强背景图对比) */
+        .qr-hero::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(250, 235, 220, 0.4);
+            pointer-events: none;
+        }
+
+        .qr-container {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .brand {
+            flex: 2 1 180px;
+        }
+
+        .brand h1 {
+            font-size: 2.2rem;
+            font-weight: 700;
+            letter-spacing: 4px;
+            color: #4f2d1a;
+            line-height: 1.1;
+            text-shadow: 2px 2px 0 rgba(255,215,185,0.5);
+            margin-bottom: 6px;
+        }
+
+        .brand h1 small {
+            font-size: 1rem;
+            font-weight: 300;
+            display: block;
+            color: #733c23;
+            letter-spacing: 1px;
+        }
+
+        .slogan {
+            font-size: 0.9rem;
+            color: #5e3825;
+            background: rgba(255,255,240,0.5);
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 40px;
+            backdrop-filter: blur(2px);
+            border: 1px solid #dbaa89;
+            margin-top: 8px;
+        }
+
+        .qrcode-box {
+            background: #fefaf5;
+            padding: 12px 12px 8px 12px;
+            border-radius: 24px;
+            box-shadow: 0 8px 20px rgba(110, 50, 20, 0.3);
+            text-align: center;
+            width: 140px;
+            border: 2px solid #b1552c;
+        }
+
+        .qrcode-box canvas {
+            display: block;
+            width: 120px;
+            height: 120px;
+            margin: 0 auto;
+            border-radius: 16px;
+        }
+
+        .qrcode-box p {
+            font-size: 0.75rem;
+            color: #623a22;
+            margin-top: 6px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .qrcode-box i {
+            color: #b45128;
+            margin-right: 4px;
+        }
+
+        /* 分类导航提示 */
+        .category-tag {
+            padding: 18px 16px 6px 16px;
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #502e1b;
+            border-bottom: 3px solid #e2b18b;
+            margin-top: 6px;
+            background: #fffcf9;
+        }
+
+        .category-tag i {
+            color: #c0653a;
+            margin-right: 10px;
+            font-size: 1.8rem;
+            vertical-align: middle;
+        }
+
+        .menu-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            padding: 16px 16px 20px 16px;
+            background: #fffcf9;
+        }
+
+        /* 菜品卡片 */
+        .dish-card {
+            background: white;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 6px 18px rgba(158, 89, 49, 0.08);
+            transition: transform 0.2s ease;
+            border: 1px solid #ffe5d5;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .dish-card:active {
+            transform: scale(0.98);
+        }
+
+        .dish-img {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            background: #f7d5bc;  /* 暖色基底 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3.2rem;
+            font-weight: 600;
+            color: #a34826;
+            text-shadow: 2px 2px 0 #ffc5a0;
+            background-image: radial-gradient(circle at 30% 30%, #ffd8be, #ebba99);
+            position: relative;
+        }
+
+        /* 图片占位 显示菜品首字符 + 食物图标叠层 */
+        .dish-img span {
+            position: relative;
+            z-index: 2;
+            font-size: 3rem;
+            font-weight: 700;
+            color: #572e18;
+            background: rgba(255,245,225,0.6);
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(2px);
+            border: 2px solid #fdc6a0;
+        }
+
+        .dish-img i {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            font-size: 1.4rem;
+            color: #9e4e2b;
+            opacity: 0.8;
+            background: #ffe4cf;
+            padding: 6px;
+            border-radius: 50%;
+        }
+
+        .dish-info {
+            padding: 14px 10px 12px 10px;
+            background: white;
+            border-top: 1px dashed #eebd9e;
+        }
+
+        .dish-name {
+            font-size: 1rem;
+            font-weight: 650;
+            color: #2e1c12;
+            line-height: 1.35;
+            margin-bottom: 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .dish-price {
+            font-size: 1.3rem;
+            font-weight: 800;
+            color: #b64926;
+            display: flex;
+            align-items: baseline;
+            gap: 4px;
+        }
+
+        .dish-price small {
+            font-size: 0.9rem;
+            font-weight: 400;
+            color: #8f623f;
+        }
+
+        .unit {
+            font-size: 0.8rem;
+            color: #a27253;
+            margin-left: 2px;
+        }
+
+        .remark {
+            padding: 5px 16px 15px 16px;
+            font-size: 0.7rem;
+            color: #ab7f63;
+            text-align: right;
+            border-top: 1px dotted #e5cfbe;
+            background: #fffaf5;
+            letter-spacing: 0.3px;
+        }
+
+        .remark i {
+            color: #c47a52;
+            margin-right: 5px;
+        }
+
+        .footer-note {
+            text-align: center;
+            color: #b1907a;
+            font-size: 0.75rem;
+            padding: 18px 0 8px 0;
+            background: #fffcf9;
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <!-- 二维码名片 (带背景图) -->
+        <div class="qr-hero">
+            <div class="qr-container">
+                <div class="brand">
+                    <h1>川湘家宴<small>Chuan-Xiang Family Feast</small></h1>
+                    <div class="slogan"><i class="fas fa-utensils" style="margin-right:6px;"></i>健康·营养·美味</div>
+                </div>
+                <div class="qrcode-box" id="qrcodeBox">
+                    <canvas id="qrCanvas" width="120" height="120"></canvas>
+                    <p><i class="fas fa-camera"></i> 微信扫码 · 即刻点餐</p>
+                </div>
+            </div>
+            <!-- 装饰标语（取自菜单文案） -->
+            <div style="position:relative; z-index:2; margin-top:16px; font-style:italic; color:#543a27; background:rgba(255,235,210,0.6); padding:8px 14px; border-radius:60px; font-size:0.9rem; backdrop-filter:blur(2px); text-align:center; border:1px solid #d49771;">
+                <i class="fas fa-leaf"></i> 食之美在于味 · 味之美在于鲜 <i class="fas fa-dragon"></i>
+            </div>
+        </div>
+
+        <!-- 菜单分类将会通过 JS 动态渲染，保证完整性和可维护性 -->
+        <div id="dynamicMenu"></div>
+
+        <div class="footer-note">
+            <i class="far fa-images"></i> 图片仅供参考，请以实物为准 · 所有菜品新鲜现做<br>
+            <span style="opacity:0.6;">川湘家宴 · 用经典追忆一段历程</span>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // ---------- 构建完整的菜品数据 (依据上传图片逐一录入) ----------
+            const menuData = [
+                // 凉菜 (category: "凉菜")
+                { category: "凉菜", name: "红油猪舌", price: 58, imgChar: "红" },
+                { category: "凉菜", name: "蒜泥黄瓜", price: 28, imgChar: "蒜" },
+                { category: "凉菜", name: "红油耳片", price: 48, imgChar: "耳" },
+                { category: "凉菜", name: "凉拌皮蛋", price: 30, imgChar: "皮" },
+                { category: "凉菜", name: "折耳根", price: 28, imgChar: "折" },
+                { category: "凉菜", name: "花生米", price: 15, imgChar: "花" },
+
+                // 热菜 (category: "热菜")  2.jpg ~ 11.jpg 全部收录
+                { category: "热菜", name: "干煸香草鸭", price: 138, imgChar: "干" },
+                { category: "热菜", name: "椰子鸡", price: 138, imgChar: "椰" },
+                { category: "热菜", name: "啤酒鸭", price: 78, imgChar: "啤" },
+                { category: "热菜", name: "蒜香排骨", price: 88, imgChar: "蒜" },
+                { category: "热菜", name: "山捞叶炒鸡", price: 88, imgChar: "山" },
+                { category: "热菜", name: "香煎马鲛鱼", price: 88, imgChar: "香" },
+                { category: "热菜", name: "剁椒鱼头", price: 108, imgChar: "剁" },
+                { category: "热菜", name: "酸菜鱼", price: 78, imgChar: "酸" },
+                { category: "热菜", name: "韭香小河虾", price: 58, imgChar: "韭" },
+                { category: "热菜", name: "梅菜扣肉", price: 58, imgChar: "梅" },
+                { category: "热菜", name: "红烧鱼", price: 88, imgChar: "红" },
+                { category: "热菜", name: "蒸腊肉", price: 68, imgChar: "腊" },
+                { category: "热菜", name: "蒸腊肠", price: 68, imgChar: "肠" },
+                { category: "热菜", name: "回锅肉", price: 58, imgChar: "回" },
+                { category: "热菜", name: "泡椒鸡胗", price: 58, imgChar: "泡" },
+                { category: "热菜", name: "蒜苔肉丝", price: 48, imgChar: "蒜" },
+                { category: "热菜", name: "鱼香肉丝", price: 48, imgChar: "鱼" },
+                { category: "热菜", name: "韭黄肉丝", price: 48, imgChar: "韭" },
+                { category: "热菜", name: "青椒肉丝", price: 48, imgChar: "青" },
+                { category: "热菜", name: "水煮牛肉", price: 88, imgChar: "水" },
+                { category: "热菜", name: "麻辣鱼片", price: 78, imgChar: "麻" },
+                { category: "热菜", name: "毛血旺", price: 78, imgChar: "毛" },
+                { category: "热菜", name: "水煮肉片", price: 68, imgChar: "水" },
+                { category: "热菜", name: "辣子鸡", price: 88, imgChar: "辣" },
+                { category: "热菜", name: "沙姜炒鸡", price: 88, imgChar: "沙" },
+                { category: "热菜", name: "干锅肥肠", price: 78, imgChar: "干" },
+                { category: "热菜", name: "小炒黄牛肉", price: 78, imgChar: "小" },
+                { category: "热菜", name: "火爆鱿鱼", price: 68, imgChar: "火" },
+                { category: "热菜", name: "火爆肥肠", price: 68, imgChar: "肥" },
+                { category: "热菜", name: "咸鱼茄子煲", price: 48, imgChar: "咸" },
+                { category: "热菜", name: "椒盐带鱼", price: 88, imgChar: "椒" },
+                { category: "热菜", name: "黄焖猪脚", price: 88, imgChar: "黄" },
+                { category: "热菜", name: "干煸鸡翅", price: 78, imgChar: "鸡" },
+                { category: "热菜", name: "芹菜牛肉丝", price: 78, imgChar: "芹" },
+                { category: "热菜", name: "木耳肉片", price: 58, imgChar: "木" },
+                { category: "热菜", name: "蒜苗炒腊肉", price: 58, imgChar: "蒜" },
+                { category: "热菜", name: "文昌鸡", price: 88, imgChar: "文" },
+                { category: "热菜", name: "香炸小海鱼", price: 78, imgChar: "香" },
+                { category: "热菜", name: "糖醋里脊", price: 78, imgChar: "糖" },
+                { category: "热菜", name: "椒盐小酥肉", price: 68, imgChar: "椒" },
+                { category: "热菜", name: "黄豆焖鱼煲", price: 88, imgChar: "黄" },
+
+                // 素菜 (12.jpg,13.jpg,14.jpg 合并)
+                { category: "素菜", name: "包菜虾米粉丝", price: 38, imgChar: "包" },
+                { category: "素菜", name: "捞叶煎蛋", price: 32, imgChar: "捞" },
+                { category: "素菜", name: "苦瓜炒蛋", price: 32, imgChar: "苦" },
+                { category: "素菜", name: "西红柿炒蛋", price: 32, imgChar: "西" },
+                { category: "素菜", name: "鱼香茄子", price: 32, imgChar: "鱼" },
+                { category: "素菜", name: "四角豆", price: 32, imgChar: "四" },
+                { category: "素菜", name: "海南时令野菜", price: 38, imgChar: "海" },
+                { category: "素菜", name: "手撕包菜", price: 28, imgChar: "手" },
+                { category: "素菜", name: "空心菜", price: 28, imgChar: "空" },
+                { category: "素菜", name: "地瓜叶", price: 28, imgChar: "地" },
+                { category: "素菜", name: "生菜", price: 28, imgChar: "生" },
+                { category: "素菜", name: "油麦菜", price: 28, imgChar: "油" },
+                { category: "素菜", name: "虎皮青椒", price: 30, imgChar: "虎" },
+                { category: "素菜", name: "麻婆豆腐", price: 32, imgChar: "麻" },
+                { category: "素菜", name: "清炒土豆丝", price: 30, imgChar: "清" },
+                { category: "素菜", name: "韭黄炒蛋", price: 30, imgChar: "韭" },
+                { category: "素菜", name: "茄子豆角", price: 32, imgChar: "茄" },
+
+                // 汤菜 (15.jpg)
+                { category: "汤菜", name: "黄瓜皮蛋汤", price: 28, imgChar: "黄" },
+                { category: "汤菜", name: "鱼头豆腐汤", price: 78, imgChar: "鱼" },
+                { category: "汤菜", name: "紫菜蛋花汤", price: 28, imgChar: "紫" },
+                { category: "汤菜", name: "西红柿蛋汤", price: 28, imgChar: "西" },
+                { category: "汤菜", name: "青菜豆腐汤", price: 28, imgChar: "青" },
+                { category: "汤菜", name: "西红柿肉片汤", price: 48, imgChar: "肉" },
+
+                // 主食 (16.jpg)
+                { category: "主食", name: "蛋炒饭", price: 20, imgChar: "蛋" },
+                { category: "主食", name: "奶香小馒头", price: 28, imgChar: "奶" },
+                { category: "主食", name: "芽菜炒饭", price: 22, imgChar: "芽" },
+                { category: "主食", name: "纸巾 (每包)", price: 2, imgChar: "纸" },
+                { category: "主食", name: "米饭 (每位)", price: 3, imgChar: "米" }
+            ];
+
+            // 按分类聚合 (保留分类顺序)
+            const categoryOrder = ["凉菜", "热菜", "素菜", "汤菜", "主食"];
+            const grouped = {};
+            menuData.forEach(item => {
+                if (!grouped[item.category]) grouped[item.category] = [];
+                grouped[item.category].push(item);
+            });
+
+            // 生成菜单HTML
+            const container = document.getElementById('dynamicMenu');
+            let htmlStr = '';
+
+            categoryOrder.forEach(cat => {
+                if (!grouped[cat] || grouped[cat].length === 0) return;
+                htmlStr += `<div class="category-tag"><i class="fas fa-${cat === '凉菜' ? 'snowflake' : (cat === '热菜' ? 'fire' : (cat === '素菜' ? 'seedling' : (cat === '汤菜' ? 'mug-saucer' : 'bowl-food')))}"></i>${cat}</div>`;
+                htmlStr += `<div class="menu-grid">`;
+
+                grouped[cat].forEach(dish => {
+                    // 为每个菜品生成卡片
+                    htmlStr += `
+                        <div class="dish-card">
+                            <div class="dish-img">
+                                <span>${dish.imgChar}</span>
+                                <i class="fas fa-${cat === '凉菜' ? 'carrot' : (cat === '热菜' ? 'drumstick-bite' : (cat === '素菜' ? 'leaf' : (cat === '汤菜' ? 'bowl-food' : 'wheat-awn')))}"></i>
+                            </div>
+                            <div class="dish-info">
+                                <div class="dish-name">${dish.name}</div>
+                                <div class="dish-price">¥${dish.price}<small>.00</small><span class="unit">/份</span></div>
+                            </div>
+                        </div>
+                    `;
+                });
+                htmlStr += `</div>`;
+            });
+
+            // 添加图片仅供参考条 (已经存在底部, 但可插入分类后增强)
+            htmlStr += `<div class="remark"><i class="fas fa-camera-retro"></i> 图片仅为意境展示，所有菜品以实物为准 · 精雕细琢 品味经典</div>`;
+            container.innerHTML = htmlStr;
+
+            // ---------- 生成二维码 (名片) 内容为当前页面URL，客人扫码即打开此菜单 ----------
+            const qrCanvas = document.getElementById('qrCanvas');
+            const currentUrl = window.location.href;  // 真实环境就是餐厅点餐页面
+            // 如果是在本地文件，仍然生成该地址，扫码后可以分享。为了演示，默认用餐厅名
+            // 但为了保证二维码能识别，直接使用当前url
+            QRCode.toCanvas(qrCanvas, currentUrl, { width: 120, margin: 1, color: { dark: '#3f2a1b', light: '#fffaf2' } }, function (error) {
+                if (error) console.error(error);
+                else console.log('二维码生成成功! 扫码即可进入点餐页面');
+            });
+        })();
+    </script>
+
+    <!-- 添加一段确保背景图质感：设置canvas抗锯齿等 已经ok -->
+</body>
+</html>
